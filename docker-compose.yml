@@ -1,0 +1,9 @@
+services:
+  vclip:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - VCLIP_OUTPUT=/vclip/
+    volumes:
+      - /Users/sanjee/vclip:/vclip
