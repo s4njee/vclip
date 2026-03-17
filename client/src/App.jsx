@@ -4,7 +4,7 @@ import { Input } from './components/ui/input'
 import { Label } from './components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card'
 import { Badge } from './components/ui/badge'
-import { Scissors, Square, ScanSearch } from 'lucide-react'
+import { Scissors, Square, ScanSearch, Moon, Sun, Play } from 'lucide-react'
 
 const WS_URL = import.meta.env.VITE_WS_URL ||
   `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
@@ -34,8 +34,14 @@ export default function App() {
   const [burnSubtitle, setBurnSubtitle] = useState(false)
   const [selectedSubtitleSi, setSelectedSubtitleSi] = useState(0)
   const [selectedAudioIndex, setSelectedAudioIndex] = useState(null)
+  const [darkMode, setDarkMode] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [previewPlaying, setPreviewPlaying] = useState(false)
+  const [clipStart, setClipStart] = useState(null)
+  const [clipEnd, setClipEnd] = useState(null)
   const wsRef = useRef(null)
   const logsEndRef = useRef(null)
+  const videoRef = useRef(null)
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -47,6 +53,83 @@ export default function App() {
     setBurnSubtitle(false)
     setSelectedAudioIndex(null)
   }, [inputPath])
+
+  // Dark mode toggle
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [darkMode])
+
+  // Setup preview video when input path changes and file is analyzed
+  useEffect(() => {
+    if (inputPath && streams) {
+      const url = URL.createObjectURL(new Blob([], { type: 'application/octet-stream' })) // placeholder
+      setPreviewUrl(null)
+      // For now, just clear preview URL
+    }
+  }, [inputPath, streams])
+
+  // Cleanup preview URL
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
+
+  // Preview functions
+  const handlePreviewFile = (path) => {
+    if (!path) return
+    // In a real implementation, this would fetch the video file and create a preview
+    // For now, we'll set a placeholder
+    console.log('Previewing:', path)
+    setPreviewUrl(path) // Use the file path directly for local preview
+    setClipStart(null)
+    setClipEnd(null)
+    setPreviewPlaying(false)
+  }
+
+  const togglePreviewPlay = () => {
+    if (videoRef.current) {
+      if (previewPlaying) {
+        videoRef.current.pause()
+      } else {
+        videoRef.current.play()
+      }
+      setPreviewPlaying(!previewPlaying)
+    }
+  }
+
+  const handleSeek = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const percent = x / rect.width
+    const videoDuration = videoRef.current?.duration || 0
+    const seekTime = percent * videoDuration
+    setClipStart(seekTime)
+    setPreviewPlaying(false)
+    if (videoRef.current) {
+      videoRef.current.currentTime = seekTime
+    }
+  }
+
+  const handleClipFromPreview = () => {
+    if (clipStart !== null && clipEnd !== null) {
+      setStartTime(clipStart.toFixed(2))
+      setEndTime(clipEnd.toFixed(2))
+      appendLog(`Clip set from ${clipStart}s to ${clipEnd}s`, 'info')
+    }
+  }
+
+  const handleClearClip = () => {
+    setClipStart(null)
+    setClipEnd(null)
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0
+    }
+  }
 
   const appendLog = useCallback((text, type = 'info') => {
     setLogs(prev => [...prev, { text, type, id: Date.now() + Math.random() }])
@@ -162,15 +245,34 @@ export default function App() {
     error: <Badge variant="destructive">Error</Badge>,
   }[status]
 
+  const durationToTime = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '00:00'
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = Math.floor(seconds % 60)
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  }
+
   return (
-    <div className="min-h-screen bg-background p-8">
+    <div className="min-h-screen bg-background dark:bg-slate-950 text-foreground dark:text-slate-100" style={{minHeight: '100vh', padding: '2rem'}}>
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <Scissors className="h-8 w-8" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">vclip</h1>
-            <p className="text-muted-foreground text-sm">Clip videos with ffmpeg</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Scissors className="h-8 w-8" />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">vclip</h1>
+              <p className="text-muted-foreground text-sm">Clip videos with ffmpeg</p>
+            </div>
           </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setDarkMode(!darkMode)}
+            className="rounded-full"
+            aria-label="Toggle dark mode"
+          >
+            {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
         </div>
 
         <Card>
@@ -206,85 +308,177 @@ export default function App() {
             </div>
 
             {streams && (
-              <div className="rounded-md border p-3 space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tracks</p>
-                <div className="space-y-1">
-                  {streams.map(s => (
-                    <div key={s.index} className="flex items-center gap-2 text-sm">
-                      <TrackBadge type={s.codecType} />
-                      <span className="font-mono text-muted-foreground">#{s.index}</span>
-                      <span>{s.codecName}</span>
-                      {s.language && <span className="text-muted-foreground">[{s.language}]</span>}
-                      {s.title && <span className="text-muted-foreground">— {s.title}</span>}
+              <>
+                <div className="rounded-md border p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tracks</p>
+                  <div className="space-y-1">
+                    {streams.map(s => (
+                      <div key={s.index} className="flex items-center gap-2 text-sm">
+                        <TrackBadge type={s.codecType} />
+                        <span className="font-mono text-muted-foreground">#{s.index}</span>
+                        <span>{s.codecName}</span>
+                        {s.language && <span className="text-muted-foreground">[{s.language}]</span>}
+                        {s.title && <span className="text-muted-foreground">— {s.title}</span>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {audioStreams.length > 1 && (
+                    <div className="pt-2 border-t space-y-2">
+                      <Label>Audio Track</Label>
+                      <select
+                        value={selectedAudioIndex ?? ''}
+                        onChange={e => setSelectedAudioIndex(Number(e.target.value))}
+                        disabled={isRunning}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {audioStreams.map(s => (
+                          <option key={s.index} value={s.index}>
+                            #{s.index} {s.codecName}
+                            {s.language ? ` [${s.language}]` : ''}
+                            {s.title ? ` — ${s.title}` : ''}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  ))}
+                  )}
+
+                  {subtitleStreams.length > 0 && (
+                    <div className="pt-2 border-t space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="burn-subtitles"
+                          checked={burnSubtitle}
+                          onChange={e => setBurnSubtitle(e.target.checked)}
+                          disabled={isRunning}
+                          className="h-4 w-4"
+                        />
+                        <Label htmlFor="burn-subtitles">Burn in subtitles</Label>
+                      </div>
+                      {burnSubtitle && (
+                        <>
+                          <select
+                            value={selectedSubtitleSi}
+                            onChange={e => setSelectedSubtitleSi(Number(e.target.value))}
+                            disabled={isRunning}
+                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {subtitleStreams.map(s => (
+                              <option key={s.index} value={s.subtitleSi}>
+                                #{s.index} {s.codecName}
+                                {s.language ? ` [${s.language}]` : ''}
+                                {s.title ? ` — ${s.title}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          {(() => {
+                            const IMAGE_CODECS = ['hdmv_pgs_subtitle', 'dvd_subtitle', 'dvbsub', 'xsub']
+                            const selected = subtitleStreams.find(s => s.subtitleSi === selectedSubtitleSi)
+                            if (selected && IMAGE_CODECS.includes(selected.codecName)) {
+                              return (
+                                <p className="text-xs text-amber-600">
+                                  Warning: {selected.codecName} is an image-based subtitle format and cannot be burned in with this tool. Only text-based formats (ASS, SRT, SSA) are supported.
+                                </p>
+                              )
+                            }
+                          })()}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {audioStreams.length > 1 && (
-                  <div className="pt-2 border-t space-y-2">
-                    <Label>Audio Track</Label>
-                    <select
-                      value={selectedAudioIndex ?? ''}
-                      onChange={e => setSelectedAudioIndex(Number(e.target.value))}
-                      disabled={isRunning}
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {audioStreams.map(s => (
-                        <option key={s.index} value={s.index}>
-                          #{s.index} {s.codecName}
-                          {s.language ? ` [${s.language}]` : ''}
-                          {s.title ? ` — ${s.title}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {subtitleStreams.length > 0 && (
-                  <div className="pt-2 border-t space-y-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="burn-subtitles"
-                        checked={burnSubtitle}
-                        onChange={e => setBurnSubtitle(e.target.checked)}
-                        disabled={isRunning}
-                        className="h-4 w-4"
-                      />
-                      <Label htmlFor="burn-subtitles">Burn in subtitles</Label>
-                    </div>
-                    {burnSubtitle && (
-                      <>
-                        <select
-                          value={selectedSubtitleSi}
-                          onChange={e => setSelectedSubtitleSi(Number(e.target.value))}
-                          disabled={isRunning}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                {/* Video Preview Section */}
+                {inputPath && (
+                  <div className="rounded-md border p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Video Preview</p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePreviewFile(inputPath)}
+                          disabled={previewPlaying}
                         >
-                          {subtitleStreams.map(s => (
-                            <option key={s.index} value={s.subtitleSi}>
-                              #{s.index} {s.codecName}
-                              {s.language ? ` [${s.language}]` : ''}
-                              {s.title ? ` — ${s.title}` : ''}
-                            </option>
-                          ))}
-                        </select>
-                        {(() => {
-                          const IMAGE_CODECS = ['hdmv_pgs_subtitle', 'dvd_subtitle', 'dvbsub', 'xsub']
-                          const selected = subtitleStreams.find(s => s.subtitleSi === selectedSubtitleSi)
-                          if (selected && IMAGE_CODECS.includes(selected.codecName)) {
-                            return (
-                              <p className="text-xs text-amber-600">
-                                Warning: {selected.codecName} is an image-based subtitle format and cannot be burned in with this tool. Only text-based formats (ASS, SRT, SSA) are supported.
-                              </p>
-                            )
-                          }
-                        })()}
+                          <ScanSearch className="h-4 w-4 mr-1" />
+                          Load
+                        </Button>
+                        {previewUrl && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleClearClip}
+                          >
+                            Clear Clip
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {previewUrl && (
+                      <>
+                        <div className="relative bg-black rounded-md overflow-hidden aspect-video group">
+                          <video
+                            ref={videoRef}
+                            src={previewUrl}
+                            className="w-full h-full"
+                            onLoadedMetadata={(e) => {
+                              const duration = e.target.duration
+                              console.log('Video loaded:', duration, 'seconds')
+                            }}
+                            onError={(e) => {
+                              console.error('Video error:', e)
+                              appendLog('Could not load video preview. The file may need to be served by the server.', 'error')
+                            }}
+                          />
+                          {/* Seek Controls Overlay */}
+                          <div
+                            className="absolute inset-x-0 bottom-0 p-2 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={handleSeek}
+                          >
+                            <div className="h-1 bg-gray-600 rounded cursor-pointer">
+                              <div
+                                className="h-full bg-blue-500 rounded transition-all"
+                                style={{
+                                  width: clipStart !== null ? `${(clipStart / (videoRef.current?.duration || 1)) * 100}%` : '0%'
+                                }}
+                              />
+                            </div>
+                          </div>
+                          {/* Play/Pause Button */}
+                          <Button
+                            variant="secondary"
+                            size="icon"
+                            className="absolute top-2 right-2 h-8 w-8 rounded-full"
+                            onClick={togglePreviewPlay}
+                            aria-label={previewPlaying ? 'Pause' : 'Play'}
+                          >
+                            {previewPlaying ? (
+                              <Square className="h-4 w-4" />
+                            ) : (
+                              <Play className="h-4 w-4" />
+                            )}
+                          </Button>
+                          {/* Current Time Display */}
+                          <div className="absolute bottom-2 left-2 text-white text-xs font-mono bg-black/70 px-2 py-1 rounded">
+                            {durationToTime(videoRef.current?.currentTime || 0)} / {durationToTime(videoRef.current?.duration || 0)}
+                          </div>
+                        </div>
+                        {/* Clip Selection Display */}
+                        {(clipStart !== null || clipEnd !== null) && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Selected range:</span>
+                            <span className="font-mono">
+                              {clipStart !== null ? durationToTime(clipStart) : '00:00:00'} — {clipEnd !== null ? durationToTime(clipEnd) : '---'}
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
                 )}
-              </div>
+              </>
             )}
 
             <div className="space-y-2">
