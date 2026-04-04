@@ -146,27 +146,28 @@ export default function App() {
     setPreviewPlaying(false)
   }
 
+  const parseTime = (t) => {
+    if (!t || t === '') return null
+    if (!isNaN(Number(t))) return Number(t)
+    const parts = t.split(':').map(Number)
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    if (parts.length === 2) return parts[0] * 60 + parts[1]
+    return null
+  }
+
   const togglePreviewPlay = () => {
     if (videoRef.current) {
       if (previewPlaying) {
         videoRef.current.pause()
+        setPreviewPlaying(false)
       } else {
-        // Seek to start time before playing
-        const parseTime = (t) => {
-          if (!t || t === '') return null
-          if (!isNaN(Number(t))) return Number(t)
-          const parts = t.split(':').map(Number)
-          if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
-          if (parts.length === 2) return parts[0] * 60 + parts[1]
-          return null
-        }
         const start = parseTime(startTime)
-        if (start !== null && videoRef.current.paused) {
+        if (start !== null) {
           videoRef.current.currentTime = start
         }
         videoRef.current.play()
+        setPreviewPlaying(true)
       }
-      setPreviewPlaying(!previewPlaying)
     }
   }
 
@@ -588,7 +589,7 @@ export default function App() {
                   <Button
                     variant="secondary"
                     size="icon"
-                    className="absolute top-2 right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full"
                     onClick={togglePreviewPlay}
                     aria-label={previewPlaying ? 'Pause' : 'Play'}
                   >
@@ -611,9 +612,19 @@ export default function App() {
                 </div>
 
                 {startTime && endTime && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Press play to preview the clip from {startTime} to {endTime} (loops automatically)
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={togglePreviewPlay}
+                    >
+                      <Play className="h-4 w-4 mr-2" />
+                      {previewPlaying ? 'Pause' : 'Preview Clip'}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      {startTime} → {endTime} (loops)
+                    </p>
+                  </div>
                 )}
               </div>
             )}
