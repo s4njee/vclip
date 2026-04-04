@@ -14,6 +14,8 @@ spec:
       labels:
         app: vclip
     spec:
+      imagePullSecrets:
+        - name: registry-s8njee-pull
       containers:
         - name: vclip
           image: registry.s8njee.com/vclip:latest
