@@ -97,21 +97,44 @@ export default function App() {
     }
   }, [darkMode])
 
-  // Setup preview video when input path changes and file is analyzed
+  // Auto-load preview when file is analyzed
   useEffect(() => {
     if (inputPath && streams) {
-      const url = URL.createObjectURL(new Blob([], { type: 'application/octet-stream' })) // placeholder
-      setPreviewUrl(null)
-      // For now, just clear preview URL
+      handlePreviewFile(inputPath)
     }
-  }, [inputPath, streams])
+  }, [streams])
 
-  // Cleanup preview URL
+  // Enforce clip boundaries during playback
   useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    const video = videoRef.current
+    if (!video || !previewUrl) return
+
+    const parseTime = (t) => {
+      if (!t || t === '') return null
+      if (!isNaN(Number(t))) return Number(t)
+      const parts = t.split(':').map(Number)
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+      if (parts.length === 2) return parts[0] * 60 + parts[1]
+      return null
     }
-  }, [previewUrl])
+
+    const start = parseTime(startTime)
+    const end = parseTime(endTime)
+
+    const onTimeUpdate = () => {
+      if (end !== null && video.currentTime >= end) {
+        if (start !== null) {
+          video.currentTime = start
+        } else {
+          video.pause()
+          setPreviewPlaying(false)
+        }
+      }
+    }
+
+    video.addEventListener('timeupdate', onTimeUpdate)
+    return () => video.removeEventListener('timeupdate', onTimeUpdate)
+  }, [previewUrl, startTime, endTime])
 
   // Preview functions
   const handlePreviewFile = (path) => {
@@ -128,6 +151,19 @@ export default function App() {
       if (previewPlaying) {
         videoRef.current.pause()
       } else {
+        // Seek to start time before playing
+        const parseTime = (t) => {
+          if (!t || t === '') return null
+          if (!isNaN(Number(t))) return Number(t)
+          const parts = t.split(':').map(Number)
+          if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+          if (parts.length === 2) return parts[0] * 60 + parts[1]
+          return null
+        }
+        const start = parseTime(startTime)
+        if (start !== null && videoRef.current.paused) {
+          videoRef.current.currentTime = start
+        }
         videoRef.current.play()
       }
       setPreviewPlaying(!previewPlaying)
@@ -481,95 +517,6 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Video Preview Section */}
-                {inputPath && (
-                  <div className="rounded-md border p-3 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Video Preview</p>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handlePreviewFile(inputPath)}
-                          disabled={previewPlaying}
-                        >
-                          <ScanSearch className="h-4 w-4 mr-1" />
-                          Load
-                        </Button>
-                        {previewUrl && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleClearClip}
-                          >
-                            Clear Clip
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {previewUrl && (
-                      <>
-                        <div className="relative bg-black rounded-md overflow-hidden aspect-video group">
-                          <video
-                            ref={videoRef}
-                            src={previewUrl}
-                            className="w-full h-full"
-                            onLoadedMetadata={(e) => {
-                              const duration = e.target.duration
-                              console.log('Video loaded:', duration, 'seconds')
-                            }}
-                            onError={(e) => {
-                              console.error('Video error:', e)
-                              appendLog('Could not load video preview. The file may need to be served by the server.', 'error')
-                            }}
-                          />
-                          {/* Seek Controls Overlay */}
-                          <div
-                            className="absolute inset-x-0 bottom-0 p-2 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={handleSeek}
-                          >
-                            <div className="h-1 bg-gray-600 rounded cursor-pointer">
-                              <div
-                                className="h-full bg-blue-500 rounded transition-all"
-                                style={{
-                                  width: clipStart !== null ? `${(clipStart / (videoRef.current?.duration || 1)) * 100}%` : '0%'
-                                }}
-                              />
-                            </div>
-                          </div>
-                          {/* Play/Pause Button */}
-                          <Button
-                            variant="secondary"
-                            size="icon"
-                            className="absolute top-2 right-2 h-8 w-8 rounded-full"
-                            onClick={togglePreviewPlay}
-                            aria-label={previewPlaying ? 'Pause' : 'Play'}
-                          >
-                            {previewPlaying ? (
-                              <Square className="h-4 w-4" />
-                            ) : (
-                              <Play className="h-4 w-4" />
-                            )}
-                          </Button>
-                          {/* Current Time Display */}
-                          <div className="absolute bottom-2 left-2 text-white text-xs font-mono bg-black/70 px-2 py-1 rounded">
-                            {durationToTime(videoRef.current?.currentTime || 0)} / {durationToTime(videoRef.current?.duration || 0)}
-                          </div>
-                        </div>
-                        {/* Clip Selection Display */}
-                        {(clipStart !== null || clipEnd !== null) && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Selected range:</span>
-                            <span className="font-mono">
-                              {clipStart !== null ? durationToTime(clipStart) : '00:00:00'} — {clipEnd !== null ? durationToTime(clipEnd) : '---'}
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
               </>
             )}
 
@@ -606,6 +553,70 @@ export default function App() {
                 />
               </div>
             </div>
+
+            {/* Video Preview Section - below clip inputs */}
+            {previewUrl && (
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Clip Preview</p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePreviewFile(inputPath)}
+                    >
+                      <ScanSearch className="h-4 w-4 mr-1" />
+                      Reload
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="relative bg-black rounded-md overflow-hidden aspect-video group">
+                  <video
+                    ref={videoRef}
+                    src={previewUrl}
+                    className="w-full h-full"
+                    onLoadedMetadata={(e) => {
+                      console.log('Video loaded:', e.target.duration, 'seconds')
+                    }}
+                    onError={(e) => {
+                      console.error('Video error:', e)
+                      appendLog('Could not load video preview. The file may need to be served by the server.', 'error')
+                    }}
+                  />
+                  {/* Play/Pause Button */}
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={togglePreviewPlay}
+                    aria-label={previewPlaying ? 'Pause' : 'Play'}
+                  >
+                    {previewPlaying ? (
+                      <Square className="h-4 w-4" />
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
+                  </Button>
+                  {/* Current Time Display */}
+                  <div className="absolute bottom-2 left-2 text-white text-xs font-mono bg-black/70 px-2 py-1 rounded">
+                    {durationToTime(videoRef.current?.currentTime || 0)} / {durationToTime(videoRef.current?.duration || 0)}
+                  </div>
+                  {/* Clip region indicator */}
+                  {startTime && endTime && (
+                    <div className="absolute bottom-2 right-2 text-white text-xs font-mono bg-blue-600/80 px-2 py-1 rounded">
+                      Clip: {startTime} → {endTime}
+                    </div>
+                  )}
+                </div>
+
+                {startTime && endTime && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Press play to preview the clip from {startTime} to {endTime} (loops automatically)
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-2 pt-2">
               <Button onClick={handleClip} disabled={isRunning} className="flex-1">
