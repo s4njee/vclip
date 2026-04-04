@@ -11,6 +11,48 @@ const PORT = process.env.PORT || 3001
 
 const app = express()
 app.use(express.static(path.join(__dirname, 'client/dist')))
+
+app.get('/api/readdir', (req, res) => {
+  try {
+    const targetPath = req.query.path || '/';
+    let dirToRead = targetPath;
+    let prefix = '';
+
+    let isExactDir = false;
+    try {
+      isExactDir = fs.statSync(targetPath).isDirectory();
+    } catch (e) {}
+
+    if (!isExactDir && targetPath !== '/') {
+      dirToRead = path.dirname(targetPath);
+      prefix = path.basename(targetPath).toLowerCase();
+    }
+
+    try {
+      if (!fs.statSync(dirToRead).isDirectory()) return res.json({ items: [] });
+    } catch(e) {
+      return res.json({ items: [] });
+    }
+
+    const files = fs.readdirSync(dirToRead, { withFileTypes: true });
+    
+    const items = files
+      .filter(f => !f.name.startsWith('.'))
+      .filter(f => f.name.toLowerCase().startsWith(prefix))
+      .map(f => {
+        const isDir = f.isDirectory();
+        let fullPath = path.join(dirToRead, f.name);
+        if (isDir) fullPath += '/';
+        return { name: f.name, isDir, fullPath };
+      })
+      .sort((a,b) => b.isDir - a.isDir || a.name.localeCompare(b.name));
+      
+    res.json({ items: items.slice(0, 100) });
+  } catch (err) {
+    res.json({ error: err.message, items: [] });
+  }
+});
+
 app.get('/{*path}', (_, res) => res.sendFile(path.join(__dirname, 'client/dist/index.html')))
 
 const server = createServer(app)

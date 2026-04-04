@@ -5,6 +5,7 @@ import { Label } from './components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card'
 import { Badge } from './components/ui/badge'
 import { Scissors, Square, ScanSearch, Moon, Sun, Play } from 'lucide-react'
+import LocalMode from './LocalMode'
 
 const WS_URL = import.meta.env.VITE_WS_URL ||
   `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
@@ -35,10 +36,14 @@ export default function App() {
   const [selectedSubtitleSi, setSelectedSubtitleSi] = useState(0)
   const [selectedAudioIndex, setSelectedAudioIndex] = useState(null)
   const [darkMode, setDarkMode] = useState(false)
+  const [view, setView] = useState('vclip') // 'vclip' | 'local'
   const [previewUrl, setPreviewUrl] = useState(null)
   const [previewPlaying, setPreviewPlaying] = useState(false)
   const [clipStart, setClipStart] = useState(null)
   const [clipEnd, setClipEnd] = useState(null)
+  const [pathSuggestions, setPathSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const suggestionBoxRef = useRef(null)
   const wsRef = useRef(null)
   const logsEndRef = useRef(null)
   const videoRef = useRef(null)
@@ -46,6 +51,35 @@ export default function App() {
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
+
+  // handles closing suggestion box on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (suggestionBoxRef.current && !suggestionBoxRef.current.contains(e.target)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // fetch suggestions when inputPath changes
+  useEffect(() => {
+    if (!inputPath || view !== 'vclip') {
+      setPathSuggestions([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/readdir?path=${encodeURIComponent(inputPath)}`)
+        const data = await res.json()
+        if (data.items) setPathSuggestions(data.items)
+      } catch (err) {
+        console.error("Autocomplete err:", err)
+      }
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [inputPath, view])
 
   // Clear analysis when input path changes
   useEffect(() => {
@@ -275,6 +309,27 @@ export default function App() {
           </Button>
         </div>
 
+        <div className="flex border-b">
+          {[
+            { id: 'vclip', label: 'vclip' },
+            { id: 'local', label: 'Local Mode' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setView(tab.id)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                view === tab.id
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {view === 'local' ? <LocalMode /> : (<>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -288,14 +343,53 @@ export default function App() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="input-path">Input File Path</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="input-path"
-                  placeholder="/path/to/video.mp4"
-                  value={inputPath}
-                  onChange={e => setInputPath(e.target.value)}
-                  disabled={isRunning}
-                />
+              <div className="flex flex-wrap gap-2 text-xs mb-2">
+                <span className="text-muted-foreground mr-1">Quick paths:</span>
+                {['/mnt/raid6/anime/', '/mnt/raid6/movies/', '/mnt/raid6/tv/', '/mnt/raid6/documentary/'].map(mount => (
+                  <button 
+                    key={mount} 
+                    onClick={() => { setInputPath(mount); setShowSuggestions(true); document.getElementById('input-path')?.focus(); }}
+                    className="text-blue-500 hover:text-blue-700 hover:underline cursor-pointer"
+                  >
+                    {mount}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2 relative">
+                <div ref={suggestionBoxRef} className="flex-1 relative">
+                  <Input
+                    id="input-path"
+                    placeholder="/path/to/video.mp4"
+                    value={inputPath}
+                    onChange={e => { setInputPath(e.target.value); setShowSuggestions(true); }}
+                    onFocus={() => setShowSuggestions(true)}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    disabled={isRunning}
+                  />
+                  {showSuggestions && pathSuggestions.length > 0 && (
+                    <ul className="absolute z-10 top-full left-0 right-0 mt-1 max-h-60 overflow-auto bg-background border border-border rounded-md shadow-lg py-1 text-left">
+                      {pathSuggestions.map(s => (
+                        <li 
+                          key={s.fullPath}
+                          className="px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center justify-between"
+                          onMouseDown={(e) => {
+                            // use onMouseDown instead of onClick to prevent input blur from firing before this
+                            e.preventDefault();
+                            setInputPath(s.fullPath);
+                            if (!s.isDir) setShowSuggestions(false);
+                            document.getElementById('input-path')?.focus();
+                          }}
+                        >
+                          <span className="truncate">{s.name}</span>
+                          <Badge variant={s.isDir ? "secondary" : "outline"} className="text-[10px] ml-2 shrink-0">{s.isDir ? 'DIR' : 'FILE'}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <Button
                   variant="outline"
                   onClick={handleAnalyze}
@@ -557,6 +651,8 @@ export default function App() {
             </div>
           </CardContent>
         </Card>
+
+        </>)}
       </div>
     </div>
   )
