@@ -6,10 +6,10 @@ metadata:
     app: vclip
 spec:
   ports:
-    - port: 3001
+    - port: 4202
       targetPort: 3001
       protocol: TCP
       name: http
   selector:
     app: vclip
-  type: ClusterIP
+  type: LoadBalancer
