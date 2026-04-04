@@ -53,6 +53,14 @@ app.get('/api/readdir', (req, res) => {
   }
 });
 
+app.get('/api/video', (req, res) => {
+  const videoPath = req.query.path;
+  if (!videoPath || !fs.existsSync(videoPath)) {
+    return res.status(404).send('Not Found');
+  }
+  res.sendFile(path.resolve(videoPath));
+});
+
 app.get('/{*path}', (_, res) => res.sendFile(path.join(__dirname, 'client/dist/index.html')))
 
 const server = createServer(app)

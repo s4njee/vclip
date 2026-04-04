@@ -116,10 +116,8 @@ export default function App() {
   // Preview functions
   const handlePreviewFile = (path) => {
     if (!path) return
-    // In a real implementation, this would fetch the video file and create a preview
-    // For now, we'll set a placeholder
-    console.log('Previewing:', path)
-    setPreviewUrl(path) // Use the file path directly for local preview
+    console.log('Previewing via API:', path)
+    setPreviewUrl(`/api/video?path=${encodeURIComponent(path)}`)
     setClipStart(null)
     setClipEnd(null)
     setPreviewPlaying(false)
