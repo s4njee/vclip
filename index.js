@@ -163,9 +163,13 @@ wss.on('connection', (ws) => {
     // Escape input path for use inside the subtitles filter value
     const escapedPath = inputPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:')
 
+    // When burning subtitles, -ss must go AFTER -i so the subtitles filter
+    // sees original timestamps. This is slower (decodes from start) but ensures
+    // subtitle timing is correct. Without subtitles, -ss before -i is faster.
     const args = [
-      '-ss', String(startSec),
+      ...(burnSubtitle ? [] : ['-ss', String(startSec)]),
       '-i', inputPath,
+      ...(burnSubtitle ? ['-ss', String(startSec)] : []),
       '-t', String(duration),
       '-map', '0:v:0',
       '-map', audioIndex != null ? `0:${audioIndex}` : '0:a:0',
