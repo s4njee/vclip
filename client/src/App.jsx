@@ -34,6 +34,7 @@ export default function App() {
   const [streams, setStreams] = useState(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [burnSubtitle, setBurnSubtitle] = useState(false)
+  const [flipHorizontal, setFlipHorizontal] = useState(false)
   const [selectedSubtitleSi, setSelectedSubtitleSi] = useState(0)
   const [selectedAudioIndex, setSelectedAudioIndex] = useState(null)
   const [darkMode, setDarkMode] = useState(false)
@@ -258,6 +259,7 @@ export default function App() {
         startTime,
         endTime,
         burnSubtitle,
+        flipHorizontal,
         subtitleSi: selectedSubtitleSi,
         audioIndex: selectedAudioIndex,
       }))
@@ -520,6 +522,20 @@ export default function App() {
                       )}
                     </div>
                   )}
+
+                  <div className="pt-2 border-t space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="flip-horizontal"
+                        checked={flipHorizontal}
+                        onChange={e => setFlipHorizontal(e.target.checked)}
+                        disabled={isRunning}
+                        className="h-4 w-4"
+                      />
+                      <Label htmlFor="flip-horizontal">Flip video horizontally</Label>
+                    </div>
+                  </div>
                 </div>
 
               </>

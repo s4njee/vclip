@@ -133,7 +133,7 @@ wss.on('connection', (ws) => {
       return
     }
 
-    const { inputPath, outputPath, startTime, endTime, burnSubtitle, subtitleSi, audioIndex } = msg
+    const { inputPath, outputPath, startTime, endTime, burnSubtitle, subtitleSi, audioIndex, flipHorizontal } = msg
 
     if (!inputPath || !startTime || !endTime) {
       ws.send(JSON.stringify({ type: 'error', message: 'inputPath, startTime, and endTime are required' }))
@@ -163,6 +163,10 @@ wss.on('connection', (ws) => {
     // Escape input path for use inside the subtitles filter value
     const escapedPath = inputPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:')
 
+    const filters = []
+    if (flipHorizontal) filters.push('hflip')
+    if (burnSubtitle) filters.push(`subtitles='${escapedPath}':si=${subtitleSi ?? 0}`)
+
     // When burning subtitles, -ss must go AFTER -i so the subtitles filter
     // sees original timestamps. This is slower (decodes from start) but ensures
     // subtitle timing is correct. Without subtitles, -ss before -i is faster.
@@ -173,9 +177,7 @@ wss.on('connection', (ws) => {
       '-t', String(duration),
       '-map', '0:v:0',
       '-map', audioIndex != null ? `0:${audioIndex}` : '0:a:0',
-      ...(burnSubtitle
-        ? ['-vf', `subtitles='${escapedPath}':si=${subtitleSi ?? 0}`]
-        : []),
+      ...(filters.length > 0 ? ['-vf', filters.join(',')] : []),
       '-c:v', 'libx265',
       '-crf', '18',
       '-preset', 'fast',
