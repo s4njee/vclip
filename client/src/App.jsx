@@ -41,6 +41,7 @@ export default function App() {
   const [view, setView] = useState('vclip') // 'vclip' | 'local'
   const [previewUrl, setPreviewUrl] = useState(null)
   const [previewPlaying, setPreviewPlaying] = useState(false)
+  const [previewSeeking, setPreviewSeeking] = useState(false)
   const [clipStart, setClipStart] = useState(null)
   const [clipEnd, setClipEnd] = useState(null)
   const [pathSuggestions, setPathSuggestions] = useState([])
@@ -158,17 +159,29 @@ export default function App() {
   }
 
   const togglePreviewPlay = () => {
-    if (videoRef.current) {
-      if (previewPlaying) {
-        videoRef.current.pause()
-        setPreviewPlaying(false)
-      } else {
-        const start = parseTime(startTime)
-        if (start !== null) {
-          videoRef.current.currentTime = start
-        }
-        videoRef.current.play()
+    const video = videoRef.current
+    if (!video) return
+
+    if (previewPlaying) {
+      video.pause()
+      setPreviewPlaying(false)
+    } else {
+      const start = parseTime(startTime)
+      const doPlay = () => {
+        setPreviewSeeking(false)
+        video.play().catch(console.error)
         setPreviewPlaying(true)
+      }
+      if (start !== null) {
+        setPreviewSeeking(true)
+        const onSeeked = () => {
+          video.removeEventListener('seeked', onSeeked)
+          doPlay()
+        }
+        video.addEventListener('seeked', onSeeked)
+        video.currentTime = start
+      } else {
+        doPlay()
       }
     }
   }
@@ -605,12 +618,19 @@ export default function App() {
                       appendLog('Could not load video preview. The file may need to be served by the server.', 'error')
                     }}
                   />
+                  {/* Seeking indicator */}
+                  {previewSeeking && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <span className="text-white text-sm font-medium">Seeking...</span>
+                    </div>
+                  )}
                   {/* Play/Pause Button */}
                   <Button
                     variant="secondary"
                     size="icon"
                     className="absolute top-2 right-2 h-8 w-8 rounded-full"
                     onClick={togglePreviewPlay}
+                    disabled={previewSeeking}
                     aria-label={previewPlaying ? 'Pause' : 'Play'}
                   >
                     {previewPlaying ? (
@@ -637,9 +657,10 @@ export default function App() {
                       variant="outline"
                       className="flex-1"
                       onClick={togglePreviewPlay}
+                      disabled={previewSeeking}
                     >
                       <Play className="h-4 w-4 mr-2" />
-                      {previewPlaying ? 'Pause' : 'Preview Clip'}
+                      {previewSeeking ? 'Seeking...' : previewPlaying ? 'Pause' : 'Preview Clip'}
                     </Button>
                     <p className="text-xs text-muted-foreground">
                       {startTime} → {endTime} (loops)
