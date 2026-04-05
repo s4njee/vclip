@@ -29,6 +29,7 @@ export default function App() {
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [logs, setLogs] = useState([])
+  const [ffmpegCommand, setFfmpegCommand] = useState('')
   const [status, setStatus] = useState('idle') // idle | connecting | running | done | error
   const [streams, setStreams] = useState(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -244,6 +245,7 @@ export default function App() {
       return
     }
     setLogs([])
+    setFfmpegCommand('')
     setStatus('connecting')
     const ws = getWs()
 
@@ -265,6 +267,8 @@ export default function App() {
       const msg = JSON.parse(event.data)
       if (msg.type === 'stdout' || msg.type === 'stderr') {
         appendLog(msg.data, msg.type)
+      } else if (msg.type === 'command') {
+        setFfmpegCommand(msg.data)
       } else if (msg.type === 'exit') {
         if (msg.code === 0) {
           setStatus('done')
@@ -640,6 +644,17 @@ export default function App() {
                   Stop
                 </Button>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">ffmpeg Command</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-black rounded-md p-4 overflow-x-auto whitespace-pre-wrap font-mono text-xs text-blue-300">
+              {ffmpegCommand || <span className="text-gray-500">Command will appear here...</span>}
             </div>
           </CardContent>
         </Card>

@@ -185,7 +185,8 @@ wss.on('connection', (ws) => {
       resolvedOutput,
     ]
 
-    ws.send(JSON.stringify({ type: 'stderr', data: `Running: ffmpeg ${args.join(' ')}` }))
+    ws.send(JSON.stringify({ type: 'command', data: `ffmpeg ${args.join(' ')}` }))
+    ws.send(JSON.stringify({ type: 'stderr', data: `Running ffmpeg process...` }))
 
     ffmpegProcess = spawn('ffmpeg', args)
 
