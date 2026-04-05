@@ -169,15 +169,26 @@ export default function App() {
       const start = parseTime(startTime)
       const doPlay = () => {
         setPreviewSeeking(false)
-        video.play().catch(console.error)
-        setPreviewPlaying(true)
+        video.play().then(() => {
+          setPreviewPlaying(true)
+        }).catch((err) => {
+          console.error('play() failed:', err)
+          setPreviewPlaying(false)
+        })
       }
       if (start !== null) {
         setPreviewSeeking(true)
+        let seekTimer
         const onSeeked = () => {
+          clearTimeout(seekTimer)
           video.removeEventListener('seeked', onSeeked)
           doPlay()
         }
+        // Fallback: if seeked never fires (e.g. unsupported format), unblock after 2s
+        seekTimer = setTimeout(() => {
+          video.removeEventListener('seeked', onSeeked)
+          doPlay()
+        }, 2000)
         video.addEventListener('seeked', onSeeked)
         video.currentTime = start
       } else {
