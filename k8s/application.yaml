@@ -11,7 +11,7 @@ spec:
     path: k8s
   destination:
     server: 'https://kubernetes.default.svc' # Target cluster URL
-    namespace: default
+    namespace: vclip
   syncPolicy:
     automated:
       prune: true
