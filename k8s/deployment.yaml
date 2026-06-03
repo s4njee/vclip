@@ -20,7 +20,14 @@ spec:
       containers:
         - name: vclip
           image: registry.s8njee.com/vclip:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "4"
+              memory: 4Gi
           ports:
             - containerPort: 3001
           env:
